@@ -1,0 +1,46 @@
+{
+ "status": "sourced",
+ "sha256": "39abda7cd91c9cab3b8bb4552dd6dd79f6caac4f83efb66e77891b9d9546f802",
+ "covers_from": "2026-09-16",
+ "covers_through": "2027-12-31",
+ "sources": [
+  {
+   "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+   "read_utc": "2026-10-13T16:54:25Z"
+  },
+  {
+   "url": "https://www.federalreserve.gov/newsevents/2026-september.htm",
+   "read_utc": "2026-10-13T17:03:17Z"
+  },
+  {
+   "url": "https://www.federalreserve.gov/newsevents/2026-october.htm",
+   "read_utc": "2026-10-13T16:57:04Z"
+  },
+  {
+   "url": "https://www.federalreserve.gov/newsevents/2026-december.htm",
+   "read_utc": "2026-10-13T16:58:31Z"
+  },
+  {
+   "url": "https://www.ecb.europa.eu/press/govcdec/mopo/html/index.en.html",
+   "read_utc": "2026-10-13T17:03:29Z"
+  },
+  {
+   "url": "https://www.gov.uk/bank-holidays.json",
+   "read_utc": "2026-10-13T16:55:33Z"
+  }
+ ],
+ "source": {
+  "data_commit": "a23f65c013d5ee79049548e38f90912e54e663fd",
+  "path": "research/departments/DATA/forward/FORWARD_EVENTS.csv",
+  "branch": "dept/data",
+  "note": "DATA's FORWARD_EVENTS.csv (build_forward_events.py) in DATA release 3 (a23f65c0, on dept/data and merged on the coordinator branch; the same bytes as DATA's first publication 6db4764c), from its forward calendar delivered under STATS-FWDCAL-20261014-01; copied byte for byte. 31 rows from the last FOMC statement before 9 Oct 2026 (2026-09-16, held) through 31 Dec 2027 (DATA's stated range). utc is blank in 18 rows on purpose: the UK bank holidays (whole days) and the eight 2027 FOMC statements, whose times federalreserve.gov has not stated yet."
+ },
+ "untimed_rows": "A row with a blank utc is scheduled with no time yet (or a whole day). It counts for nothing in a plan, and a pick's run refuses while any FOMC or ECB row of its type up to the next one after the run day has no time (fwd_core.check_coverage). With this calendar the FOMC picks (R53-S3X3, FC-1) can run only through run day 8 Dec 2026 (the next timed statement must be after the run day), until DATA adds the 2027 FOMC times; every ECB row has its time. DATA adding a time to such a row is a normal update, not a calendar change (fwd_core.snapshot_changes; red team 4, item 1).",
+ "release_list_complete_for": null,
+ "update": [
+  "Each row: event_id (unique), type, local_date (YYYY-MM-DD), local_time, tz (an IANA zone), utc (ISO, Z; blank when the source states no time yet), scheduled (1 or 0), status (scheduled before the event; held after it, once an official source confirms it; cancelled if cancelled), source_url (https, official page), source_note, source_read_utc (ISO, Z: when that source was read; for a held row it must be after the event, or the calendar is refused). A row with a time must fall on its local_date in its tz; a held FOMC or ECB row needs its time. A trade settles only when every row it depends on is held with such a source, or cancelled.",
+  "Coverage: every scheduled FOMC statement from the last one before 9 Oct 2026 (the FC-1 cycle anchor), and every ECB decision, through at least the first one after the latest run day, each with its time, from federalreserve.gov and ecb.europa.eu. Release-only rows (any other type) are read only by the cost model's release list; when every release COST_MODEL lists for EUR/USD is in, set release_list_complete_for to COST_MODEL.json's sha256 (DEPS.json cost).",
+  "To update: copy DATA's new published file byte for byte (git show <commit>:<path>), then set sha256 to its sha256, covers_from and covers_through (YYYY-MM-DD), the sources with the date read, source.data_commit (the full 40-hex DATA commit, on origin/dept/data and merged on the coordinator branch) and source.path (the file in that commit, under research/departments/DATA/). The gate (fwd_io.check_calendar_pin) refuses otherwise. The CSV and this pin are outside the forward tree's hash, so a calendar update needs a new pin, not a new code approval. A change other than scheduled -> held, a time added, or new rows after the known range needs a pushed STATS ruling in research/departments/STATS/FORWARD_RULINGS.jsonl before the next run (FORWARD.md)."
+ ],
+ "rules": "No date or time is invented or remembered. Rows come only from DATA's published calendar (EVENTS owns the release calendar; DATA fetches central-bank pages, EDGE_HUNT section 5). Never from research/round17/data/events.csv (its US dates came from ALFRED, which is out on its terms); it and DATA's meetings.py stop at Dec 2025 anyway, and research/round55/CALENDARS.json holds only Treasury auctions."
+}
