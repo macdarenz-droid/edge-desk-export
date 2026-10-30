@@ -13,9 +13,9 @@ export LC_ALL=C
 
 EXPORT_REPO="macdarenz-droid/edge-desk-export"
 EXPORT_BRANCH="ccr-502b38a8-ss5029"
-RELEASE_NAME="edge-desk-44bef44e349b.tar.gz"
-RELEASE_SHA256="f9206cad129172a30a30066372625c8556b8e6df34531f98cd94ecae26168408"
-COMMIT="44bef44e349b82f2f68969c96e3f0cb93c247314"
+RELEASE_NAME="edge-desk-b7d4bf4a4c20.tar.gz"
+RELEASE_SHA256="695f24cebabb4f0cf17442d7303fd4ccbb905c882de8427ea459a5c5ccf57c2a"
+COMMIT="b7d4bf4a4c209416174c82d3bc0a8f7e4df1f03e"
 API=https://api.github.com
 OPT=/opt/edge-desk
 SECRETS=/etc/edge-desk/install
@@ -23,6 +23,7 @@ ENV_FILE=/etc/edge-desk/env
 STATE=/var/lib/edge-desk-install
 MT5_DONE=/home/mt5/edge/setup.done
 CHOICES=/etc/edge-desk/choices          # his own choices, nothing secret (render_config.py --choices-file)
+READER_ENV=/etc/edge-desk/reader.env    # the picture reading key only (root, 0600); edge-desk-reader.service alone
 DASH_NEW=""
 
 say() { printf '%s\n' "$*"; }
@@ -103,6 +104,7 @@ valid() {
     ts_key) [[ "$v" =~ ^tskey-[A-Za-z0-9-]{10,200}$ ]] ;;
     oanda) [[ "$v" =~ ^[A-Za-z0-9-]{20,200}$ ]] ;;
     dashboard) [[ ${#v} -ge 32 && ${#v} -le 200 && "$v" =~ ^[!-~]+$ && "$v" != *[\"\'\\\`]* && "$v" != \#* ]] ;;
+    reader_key) [[ "$v" =~ ^sk-ant-[A-Za-z0-9_-]{20,250}$ ]] ;;
     *) return 1 ;;
   esac
 }
@@ -194,6 +196,7 @@ ask() {
   [ -n "$DASH" ] && VALUE="$DASH" set_env EDGE_DASHBOARD_TOKEN
   unset DASH
   ask_photos
+  ask_reader_key
   # Made here, never typed: the EA's ingest token; and the export token from the paste
   env_has EDGE_INGEST_TOKEN || VALUE="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" set_env EDGE_INGEST_TOKEN
   VALUE="$T" set_env EDGE_EXPORT_TOKEN
@@ -253,6 +256,31 @@ ask_photos() {
     say "  1 or 2, please"
   done
   printf 'PHOTOS=%s\n' "$cur" > "$CHOICES"
+}
+
+# ask_reader_key: the picture reading key from his Claude Console (docs/JOURNAL_DESIGN.md §9), asked once and only with
+# pictures on; hidden; checked for its shape; written only to $READER_ENV (root, 0600), never to the app's env file, so
+# `serve` and every other unit never have it. Enter keeps a saved key, or skips: pictures are read from the lines only.
+ask_reader_key() {
+  local RKEY prompt="Key (hidden; Enter skips): "
+  grep -qx 'PHOTOS=on' "$CHOICES" 2>/dev/null || return 0
+  say "Picture reading key: from your Claude Console, a key for this app only, with a monthly spend limit set there."
+  say "Typed here only, never in chat. Enter skips: pictures are read from the lines only."
+  grep -q '^EDGE_ANTHROPIC_KEY=.' "$READER_ENV" 2>/dev/null && prompt="Key (hidden; Enter keeps the saved one): "
+  while :; do
+    IFS= read -r -s -p "$prompt" RKEY; say ""
+    if [ -z "$RKEY" ]; then break; fi
+    if valid reader_key "$RKEY"; then break; fi
+    say "  that is not a Console key (it starts with sk-ant-); paste it again"
+  done
+  if [ -n "$RKEY" ]; then
+    install -d -m 0755 -o root -g root "$(dirname "$READER_ENV")"
+    printf 'EDGE_ANTHROPIC_KEY=%s\n' "$RKEY" > "$READER_ENV.new"
+    chown root:root "$READER_ENV.new"
+    chmod 0600 "$READER_ENV.new"
+    mv -f "$READER_ENV.new" "$READER_ENV"
+  fi
+  unset RKEY
 }
 
 show_new_login() {

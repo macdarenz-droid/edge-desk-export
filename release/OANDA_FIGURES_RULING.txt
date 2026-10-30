@@ -1,2 +1,2 @@
-Release edge-desk-44bef44e349b.tar.gz (sha256 f9206cad129172a30a30066372625c8556b8e6df34531f98cd94ecae26168408, commit 44bef44e349b82f2f68969c96e3f0cb93c247314) carries 74 files with figures computed on OANDA practice prices (deploy/README.md section 12).
+Release edge-desk-b7d4bf4a4c20.tar.gz (sha256 695f24cebabb4f0cf17442d7303fd4ccbb905c882de8427ea459a5c5ccf57c2a, commit b7d4bf4a4c209416174c82d3bc0a8f7e4df1f03e) carries 74 files with figures computed on OANDA practice prices (deploy/README.md section 12).
 Allowed by: Owner's card answer, 20 Oct 2026 (CLAUDE.md 'OANDA figures in the public release'): Keep public, ship anyway
