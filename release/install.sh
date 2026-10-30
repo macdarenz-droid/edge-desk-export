@@ -12,16 +12,17 @@ umask 077
 export LC_ALL=C
 
 EXPORT_REPO="macdarenz-droid/edge-desk-export"
-EXPORT_BRANCH="main"
-RELEASE_NAME="edge-desk-0d5e1b85a1bd.tar.gz"
-RELEASE_SHA256="99e8a5e17938c91f711db41012aae44ce1be495d8a9e48c498098727867d7a9b"
-COMMIT="0d5e1b85a1bdd0f8719e9e6b70de45c16b9c2a12"
+EXPORT_BRANCH="ccr-502b38a8-ss5029"
+RELEASE_NAME="edge-desk-65c66df5b167.tar.gz"
+RELEASE_SHA256="018188535a4609d70d4dd19f17409c3fce1eafd189d5d27ba16ce97fe75cdb74"
+COMMIT="65c66df5b16734f761f61af62a24739af90f3590"
 API=https://api.github.com
 OPT=/opt/edge-desk
 SECRETS=/etc/edge-desk/install
 ENV_FILE=/etc/edge-desk/env
 STATE=/var/lib/edge-desk-install
 MT5_DONE=/home/mt5/edge/setup.done
+CHOICES=/etc/edge-desk/choices          # his own choices, nothing secret (render_config.py --choices-file)
 DASH_NEW=""
 
 say() { printf '%s\n' "$*"; }
@@ -161,6 +162,10 @@ ask() {
     unset MT5_PASSWORD
     rm -f "$MT5_DONE"
   fi
+  # the FundedNext account behind the MT5 login (type, stage, size): its loss limits in the app (account.py); asked at
+  # every paste so a passed phase can be set without typing the login again (Enter keeps the saved answers; after a
+  # login, account.py keeps them for the same account and starts another one with none: ask_funded sees MT5_LOGIN)
+  ask_funded
   # Tailscale: an auth key (login.tailscale.com/admin/settings/keys), until the server has joined
   if ts_joined; then
     say "Tailscale: already joined."
@@ -188,9 +193,66 @@ ask() {
   fi
   [ -n "$DASH" ] && VALUE="$DASH" set_env EDGE_DASHBOARD_TOKEN
   unset DASH
+  ask_photos
   # Made here, never typed: the EA's ingest token; and the export token from the paste
   env_has EDGE_INGEST_TOKEN || VALUE="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" set_env EDGE_INGEST_TOKEN
   VALUE="$T" set_env EDGE_EXPORT_TOKEN
+}
+
+# ask_funded: at every paste ("new" after a new MT5 login), the FundedNext account's type, stage and size, saved to $SECRETS/funded for
+# deploy/install/account.py, which turns them into the app's [funded] loss limits (render_config.py holds FundedNext's
+# values and their sources). Enter keeps what was saved (after a login, for the same account only); 3 turns them off.
+# Nothing here is a secret.
+ask_funded() {
+  local kind stage size name sname daily total floor target="" mode="${1:-}" keep="Enter keeps the saved one"
+  [ -n "${MT5_LOGIN:-}" ] && mode=new          # ask() just saved an MT5 login
+  [ "$mode" = new ] && keep="Enter keeps the saved answers if this is the same account; another account number starts with no loss limits"
+  say "FundedNext account: 1 = Stellar 2-Step, 2 = Stellar 1-Step, 3 = not FundedNext (no loss limits in the app);"
+  say "  ${keep}."
+  while :; do
+    IFS= read -r -p "FundedNext account (1, 2 or 3): " kind
+    case "$kind" in
+      "") rm -f "$SECRETS/funded"; return 0 ;;   # account.py decides by the account (and a file from an aborted paste goes)
+      1) kind=stellar2; name="Stellar 2-Step"; daily=5; total=10; break ;;
+      2) kind=stellar1; name="Stellar 1-Step"; daily=3; total=6; break ;;
+      3) printf 'FUNDED_TYPE=off\n' > "$SECRETS/funded"; say "  No loss limits in the app."; return 0 ;;
+    esac
+    say "  1, 2 or 3, please"
+  done
+  while :; do
+    IFS= read -r -p "Stage: 1 = Phase 1, 2 = Phase 2 (2-Step only), 3 = FundedNext Account (funded): " stage
+    case "$kind$stage" in
+      stellar21) stage=phase1; sname="Phase 1"; target=8; break ;;
+      stellar22) stage=phase2; sname="Phase 2"; target=5; break ;;
+      stellar11) stage=phase1; sname="Phase 1"; target=10; break ;;
+      stellar23|stellar13) stage=funded; sname="FundedNext Account"; break ;;
+    esac
+    say "  1, 2 or 3, please (Stellar 1-Step has no Phase 2)"
+  done
+  while :; do
+    IFS= read -r -p "Account size in USD, digits only (for example 6000): " size
+    [[ "$size" =~ ^[1-9][0-9]{2,8}$ ]] && break
+    say "  digits only, please"
+  done
+  printf 'FUNDED_TYPE=%s\nFUNDED_STAGE=%s\nFUNDED_SIZE=%s\n' "$kind" "$stage" "$size" > "$SECRETS/funded"
+  # said back, so a wrong product or a typo in the size shows now (FundedNext's rules: deploy/install/render_config.py)
+  floor=$(( size - size * total / 100 ))
+  say "  ${name}, ${sname}, ${size} USD: daily loss limit $(( size * daily / 100 )) USD, floor ${floor} USD$(
+    [ -n "$target" ] && printf ', target %s USD' "$(( size + size * target / 100 ))")."
+  say "  If that is wrong, paste the install line again, press Enter at the MT5 question and answer these again."
+}
+
+# ask_photos: the photo journal (docs/JOURNAL_DESIGN.md): his MT5 screenshots kept on this server with his trades
+# (180 days) and the trade pictures. Off until he types 1; Enter keeps what was saved.
+ask_photos() {
+  local ans cur=off
+  [ -f "$CHOICES" ] && grep -qx 'PHOTOS=on' "$CHOICES" && cur=on
+  while :; do
+    IFS= read -r -p "Pictures in the journal (kept on this server 180 days): 1 = on, 2 = off (Enter keeps $cur): " ans
+    case "$ans" in "") break ;; 1) cur=on; break ;; 2) cur=off; break ;; esac
+    say "  1 or 2, please"
+  done
+  printf 'PHOTOS=%s\n' "$cur" > "$CHOICES"
 }
 
 show_new_login() {
