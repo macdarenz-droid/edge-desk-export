@@ -13,9 +13,9 @@ export LC_ALL=C
 
 EXPORT_REPO="macdarenz-droid/edge-desk-export"
 EXPORT_BRANCH="ccr-502b38a8-ss5029"
-RELEASE_NAME="edge-desk-65c66df5b167.tar.gz"
-RELEASE_SHA256="018188535a4609d70d4dd19f17409c3fce1eafd189d5d27ba16ce97fe75cdb74"
-COMMIT="65c66df5b16734f761f61af62a24739af90f3590"
+RELEASE_NAME="edge-desk-44bef44e349b.tar.gz"
+RELEASE_SHA256="f9206cad129172a30a30066372625c8556b8e6df34531f98cd94ecae26168408"
+COMMIT="44bef44e349b82f2f68969c96e3f0cb93c247314"
 API=https://api.github.com
 OPT=/opt/edge-desk
 SECRETS=/etc/edge-desk/install
