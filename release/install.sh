@@ -12,10 +12,10 @@ umask 077
 export LC_ALL=C
 
 EXPORT_REPO="macdarenz-droid/edge-desk-export"
-EXPORT_BRANCH="main"
-RELEASE_NAME="edge-desk-0d5e1b85a1bd.tar.gz"
-RELEASE_SHA256="99e8a5e17938c91f711db41012aae44ce1be495d8a9e48c498098727867d7a9b"
-COMMIT="0d5e1b85a1bdd0f8719e9e6b70de45c16b9c2a12"
+EXPORT_BRANCH="ccr-cd8bc1c9-23tuww"
+RELEASE_NAME="edge-desk-7698ab064bcc.tar.gz"
+RELEASE_SHA256="4e0951f8e5a0426935a9de583ef5a9c09f0d8f173a0d83496f2d7f0db8c62ba4"
+COMMIT="7698ab064bcc719d737dcb21400ec56bb864551c"
 API=https://api.github.com
 OPT=/opt/edge-desk
 SECRETS=/etc/edge-desk/install
