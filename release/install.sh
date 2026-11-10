@@ -13,15 +13,17 @@ export LC_ALL=C
 
 EXPORT_REPO="macdarenz-droid/edge-desk-export"
 EXPORT_BRANCH="ccr-cd8bc1c9-23tuww"
-RELEASE_NAME="edge-desk-7698ab064bcc.tar.gz"
-RELEASE_SHA256="4e0951f8e5a0426935a9de583ef5a9c09f0d8f173a0d83496f2d7f0db8c62ba4"
-COMMIT="7698ab064bcc719d737dcb21400ec56bb864551c"
+RELEASE_NAME="edge-desk-2e1f90bd84a1.tar.gz"
+RELEASE_SHA256="1d1b999a17db12d89d3520d15860c2638dec221102536190984efa037e1bd27a"
+COMMIT="2e1f90bd84a1653ce7b031c3c7129964f57f280d"
 API=https://api.github.com
 OPT=/opt/edge-desk
 SECRETS=/etc/edge-desk/install
 ENV_FILE=/etc/edge-desk/env
 STATE=/var/lib/edge-desk-install
 MT5_DONE=/home/mt5/edge/setup.done
+CHOICES=/etc/edge-desk/choices          # his own choices, nothing secret (render_config.py --choices-file)
+READER_ENV=/etc/edge-desk/reader.env    # the picture reading key only (root, 0600); edge-desk-reader.service alone
 DASH_NEW=""
 
 say() { printf '%s\n' "$*"; }
@@ -102,6 +104,7 @@ valid() {
     ts_key) [[ "$v" =~ ^tskey-[A-Za-z0-9-]{10,200}$ ]] ;;
     oanda) [[ "$v" =~ ^[A-Za-z0-9-]{20,200}$ ]] ;;
     dashboard) [[ ${#v} -ge 32 && ${#v} -le 200 && "$v" =~ ^[!-~]+$ && "$v" != *[\"\'\\\`]* && "$v" != \#* ]] ;;
+    reader_key) [[ "$v" =~ ^sk-ant-[A-Za-z0-9_-]{20,250}$ ]] ;;
     *) return 1 ;;
   esac
 }
@@ -161,6 +164,10 @@ ask() {
     unset MT5_PASSWORD
     rm -f "$MT5_DONE"
   fi
+  # the FundedNext account behind the MT5 login (type, stage, size): its loss limits in the app (account.py); asked at
+  # every paste so a passed phase can be set without typing the login again (Enter keeps the saved answers; after a
+  # login, account.py keeps them for the same account and starts another one with none: ask_funded sees MT5_LOGIN)
+  ask_funded
   # Tailscale: an auth key (login.tailscale.com/admin/settings/keys), until the server has joined
   if ts_joined; then
     say "Tailscale: already joined."
@@ -188,9 +195,92 @@ ask() {
   fi
   [ -n "$DASH" ] && VALUE="$DASH" set_env EDGE_DASHBOARD_TOKEN
   unset DASH
+  ask_photos
+  ask_reader_key
   # Made here, never typed: the EA's ingest token; and the export token from the paste
   env_has EDGE_INGEST_TOKEN || VALUE="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" set_env EDGE_INGEST_TOKEN
   VALUE="$T" set_env EDGE_EXPORT_TOKEN
+}
+
+# ask_funded: at every paste ("new" after a new MT5 login), the FundedNext account's type, stage and size, saved to $SECRETS/funded for
+# deploy/install/account.py, which turns them into the app's [funded] loss limits (render_config.py holds FundedNext's
+# values and their sources). Enter keeps what was saved (after a login, for the same account only); 3 turns them off.
+# Nothing here is a secret.
+ask_funded() {
+  local kind stage size name sname daily total floor target="" mode="${1:-}" keep="Enter keeps the saved one"
+  [ -n "${MT5_LOGIN:-}" ] && mode=new          # ask() just saved an MT5 login
+  [ "$mode" = new ] && keep="Enter keeps the saved answers if this is the same account; another account number starts with no loss limits"
+  say "FundedNext account: 1 = Stellar 2-Step, 2 = Stellar 1-Step, 3 = not FundedNext (no loss limits in the app);"
+  say "  ${keep}."
+  while :; do
+    IFS= read -r -p "FundedNext account (1, 2 or 3): " kind
+    case "$kind" in
+      "") rm -f "$SECRETS/funded"; return 0 ;;   # account.py decides by the account (and a file from an aborted paste goes)
+      1) kind=stellar2; name="Stellar 2-Step"; daily=5; total=10; break ;;
+      2) kind=stellar1; name="Stellar 1-Step"; daily=3; total=6; break ;;
+      3) printf 'FUNDED_TYPE=off\n' > "$SECRETS/funded"; say "  No loss limits in the app."; return 0 ;;
+    esac
+    say "  1, 2 or 3, please"
+  done
+  while :; do
+    IFS= read -r -p "Stage: 1 = Phase 1, 2 = Phase 2 (2-Step only), 3 = FundedNext Account (funded): " stage
+    case "$kind$stage" in
+      stellar21) stage=phase1; sname="Phase 1"; target=8; break ;;
+      stellar22) stage=phase2; sname="Phase 2"; target=5; break ;;
+      stellar11) stage=phase1; sname="Phase 1"; target=10; break ;;
+      stellar23|stellar13) stage=funded; sname="FundedNext Account"; break ;;
+    esac
+    say "  1, 2 or 3, please (Stellar 1-Step has no Phase 2)"
+  done
+  while :; do
+    IFS= read -r -p "Account size in USD, digits only (for example 6000): " size
+    [[ "$size" =~ ^[1-9][0-9]{2,8}$ ]] && break
+    say "  digits only, please"
+  done
+  printf 'FUNDED_TYPE=%s\nFUNDED_STAGE=%s\nFUNDED_SIZE=%s\n' "$kind" "$stage" "$size" > "$SECRETS/funded"
+  # said back, so a wrong product or a typo in the size shows now (FundedNext's rules: deploy/install/render_config.py)
+  floor=$(( size - size * total / 100 ))
+  say "  ${name}, ${sname}, ${size} USD: daily loss limit $(( size * daily / 100 )) USD, floor ${floor} USD$(
+    [ -n "$target" ] && printf ', target %s USD' "$(( size + size * target / 100 ))")."
+  say "  If that is wrong, paste the install line again, press Enter at the MT5 question and answer these again."
+}
+
+# ask_photos: the photo journal (docs/JOURNAL_DESIGN.md): his MT5 screenshots kept on this server with his trades
+# (180 days) and the trade pictures. Off until he types 1; Enter keeps what was saved.
+ask_photos() {
+  local ans cur=off
+  [ -f "$CHOICES" ] && grep -qx 'PHOTOS=on' "$CHOICES" && cur=on
+  while :; do
+    IFS= read -r -p "Pictures in the journal (kept on this server 180 days): 1 = on, 2 = off (Enter keeps $cur): " ans
+    case "$ans" in "") break ;; 1) cur=on; break ;; 2) cur=off; break ;; esac
+    say "  1 or 2, please"
+  done
+  printf 'PHOTOS=%s\n' "$cur" > "$CHOICES"
+}
+
+# ask_reader_key: the picture reading key from his Claude Console (docs/JOURNAL_DESIGN.md §9), asked once and only with
+# pictures on; hidden; checked for its shape; written only to $READER_ENV (root, 0600), never to the app's env file, so
+# `serve` and every other unit never have it. Enter keeps a saved key, or skips: pictures are read from the lines only.
+ask_reader_key() {
+  local RKEY prompt="Key (hidden; Enter skips): "
+  grep -qx 'PHOTOS=on' "$CHOICES" 2>/dev/null || return 0
+  say "Picture reading key: from your Claude Console, a key for this app only, with a monthly spend limit set there."
+  say "Typed here only, never in chat. Enter skips: pictures are read from the lines only."
+  grep -q '^EDGE_ANTHROPIC_KEY=.' "$READER_ENV" 2>/dev/null && prompt="Key (hidden; Enter keeps the saved one): "
+  while :; do
+    IFS= read -r -s -p "$prompt" RKEY; say ""
+    if [ -z "$RKEY" ]; then break; fi
+    if valid reader_key "$RKEY"; then break; fi
+    say "  that is not a Console key (it starts with sk-ant-); paste it again"
+  done
+  if [ -n "$RKEY" ]; then
+    install -d -m 0755 -o root -g root "$(dirname "$READER_ENV")"
+    printf 'EDGE_ANTHROPIC_KEY=%s\n' "$RKEY" > "$READER_ENV.new"
+    chown root:root "$READER_ENV.new"
+    chmod 0600 "$READER_ENV.new"
+    mv -f "$READER_ENV.new" "$READER_ENV"
+  fi
+  unset RKEY
 }
 
 show_new_login() {
